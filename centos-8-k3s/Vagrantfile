@@ -1,90 +1,64 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+IP_MASTER1 = "192.168.0.5"
+IP_WORKER1 = "192.168.0.6"
+IP_GW = "192.168.0.1"
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
+
 Vagrant.configure("2") do |config|
-  # The most common configuration options are documented and commented below.
-  # For a complete reference, please see the online documentation at
-  # https://docs.vagrantup.com.
+    config.vm.box = "rockylinux/8"
+    #config.vm.synced_folder ".", "/vagrant", type: "virtualbox"
+    if Vagrant.has_plugin? "vagrant-vbguest"
+    config.vbguest.no_install  = true
+    config.vbguest.auto_update = false
+    config.vbguest.no_remote   = true
+    end
 
-  # Every Vagrant development environment requires a box. You can search for
-  # boxes at https://vagrantcloud.com/search.
-  config.vm.box = "centos-8"
-  config.vm.synced_folder '.', '/vagrant', disabled: true
-  config.vm.hostname= "k3s"
-  config.disksize.size = '100GB'
+  config.vm.define "k3s" do |node|
 
+    node.vm.provider "virtualbox" do |vb|
+        vb.name = "k3s"
+        vb.memory = 4096
+        vb.cpus = 4
+        vb.customize ["modifyvm", :id, "--nested-hw-virt", "on",]
+    end
 
-  # Disable automatic box update checking. If you disable this, then
-  # boxes will only be checked for updates when the user runs
-  # `vagrant box outdated`. This is not recommended.
-  # config.vm.box_check_update = false
+    node.vm.hostname = "k3s"
+    node.vm.network :public_network, ip: IP_MASTER1
+    node.disksize.size = '100GB'
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine. In the example below,
-  # accessing "localhost:8080" will access port 80 on the guest machine.
-  # NOTE: This will enable public access to the opened port
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
+    node.vm.provision "set-hosts", :type => "shell", :path => "scripts/set-hosts.sh", env: {"MASTER_IP" => "#{IP_MASTER1}","WORKER_IP"=>"#{IP_WORKER1}"} do |s|
+      s.args = ["eth1"]
+    end
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine and only allow access
-  # via 127.0.0.1 to disable public access
-  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+    node.vm.provision "shell", run: "always", inline: "ip route del default && ip route add default via #{IP_GW} dev eth1"
+    node.vm.provision "update-dns", type: "shell", :path => "scripts/update-dns.sh"
+    node.vm.provision "install-k3s", type: "shell", :path => "scripts/install-k3s.sh", env: {"MASTER_IP" => "#{IP_MASTER1}","WORKER_IP"=>"#{IP_WORKER1}"}
+    node.vm.provision "agents-env-file", type: "shell", :path => "scripts/configure-agets-env.sh", env: {"MASTER_IP" => "#{IP_MASTER1}","WORKER_IP"=>"#{IP_WORKER1}"}
+  end
 
-  # Create a private network, which allows host-only access to the machine
-  # using a specific IP.
-  #config.vm.network "private_network", ip: "192.168.0.5"
+    config.vm.define "k3s-worker1" do |node|
 
-  # Create a public network, which generally matched to bridged network.
-  # Bridged networks make the machine appear as another physical device on
-  # your network.
-  config.vm.network "public_network", ip: "192.168.0.5"
+        node.vm.provider "virtualbox" do |vb|
+            vb.name = "k3s-worker1"
+            vb.memory = 4096
+            vb.cpus = 2
 
-  # Share an additional folder to the guest VM. The first argument is
-  # the path on the host to the actual folder. The second argument is
-  # the path on the guest to mount the folder. And the optional third
-  # argument is a set of non-required options.
-  # config.vm.synced_folder "../data", "/vagrant_data"
+            vb.customize [
+                "modifyvm", :id, "--uartmode1", "file",
+                File.join(Dir.pwd, "tmp/k3s-worker1.log")
+            ]
+            vb.customize ["modifyvm", :id, "--nested-hw-virt", "on",]
+        end
 
-  # Provider-specific configuration so you can fine-tune various
-  # backing providers for Vagrant. These expose provider-specific options.
-  # Example for VirtualBox:
-  #
-  config.vm.provider "virtualbox" do |vb|
-  #   # Display the VirtualBox GUI when booting the machine
-  #   vb.gui = true
-  #
-  #   # Customize the amount of memory on the VM:
-     vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
-	 vb.cpus = 4
-     vb.memory = "4096"
-	 vb.name = "k3s"
-   end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
+        node.vm.hostname = "k3s-worker1"
+        node.vm.network :public_network, ip: IP_WORKER1
 
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
-  # documentation for more information about their specific syntax and use.
-  config.vm.provision "shell",
-    run: "always",
-    inline: "ip route del default && ip route add default via 192.168.0.1 dev eth1"
-  config.vm.provision "shell", inline: <<-SHELL
-     #yum update -y
-     curl -sfL https://get.k3s.io -o k3s.sh 
-   export INSTALL_K3S_VERSION=v1.20.14-rc1+k3s2
-	 chmod +x k3s.sh 
-	 ./k3s.sh --advertise-address 192.168.0.5 --node-ip 192.168.0.5 --node-external-ip 192.168.0.5
-	 yum -y install wget
-	 wget https://get.helm.sh/helm-v3.6.1-linux-amd64.tar.gz
-     tar -xvzf helm-v3.6.1-linux-amd64.tar.gz
-     mv linux-amd64/helm /usr/local/bin/helm
-	 timedatectl set-timezone America/Asuncion && echo Timezone set America/Asuncion
-	 yum install iscsi-initiator-utils -y 
-  SHELL
+        node.vm.provision "set-hosts", :type => "shell", :path => "scripts/set-hosts.sh",env: {"MASTER_IP" => "#{IP_MASTER1}","WORKER_IP"=>"#{IP_WORKER1}"} do |s|
+          s.args = ["eth1"]
+        end
+
+        node.vm.provision "shell", run: "always", inline: "ip route del default && ip route add default via #{IP_GW} dev eth1"
+        node.vm.provision "update-dns", type: "shell", :path => "scripts/update-dns.sh"
+        node.vm.provision "install-k3s", type: "shell", :path => "scripts/install-agents.sh",env: {"MASTER_IP" => "#{IP_MASTER1}","WORKER_IP"=>"#{IP_WORKER1}"}
+        
+    end
 end
-
