@@ -1,4 +1,4 @@
 export INSTALL_K3S_VERSION=v1.20.14-rc1+k3s2
-export K3S_URL=https://192.168.0.5:6443
-export INSTALL_K3S_EXEC="--node-ip 192.168.0.6 --node-external-ip 192.168.0.6"
-export K3S_TOKEN=K10e1eb19249534c6222784133a365f35fdbedd7affa114e645bac58e10ca5d6f53::server:a10ef960011eed431e9b98dae6bf9640
+export K3S_URL=https://192.168.100.200:6443
+export INSTALL_K3S_EXEC="--node-ip 192.168.0.201 --node-external-ip 192.168.0.201"
+export K3S_TOKEN=K1086be00c35f080bff9ef6d4341848e963ed08ccd0e97ce1db5c722085d7673e1e::server:1953b84c93369b0683110a236bdb1299

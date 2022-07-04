@@ -9,7 +9,7 @@ curl -sfL https://get.k3s.io | sh -
 #install helm
 yum -y install wget
 if [ ! -f /usr/local/bin/helm ]; then
-    wget https://get.helm.sh/helm-v3.6.1-linux-amd64.tar.gz
+    wget -s https://get.helm.sh/helm-v3.6.1-linux-amd64.tar.gz
     tar -xvzf helm-v3.6.1-linux-amd64.tar.gz
     mv linux-amd64/helm /usr/local/bin/helm
     sudo su - root -c "echo export KUBECONFIG=/etc/rancher/k3s/k3s.yaml >> /root/.bash_profile"
